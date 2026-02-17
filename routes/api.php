@@ -24,4 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
     Route::patch('/activities/{id}/toggle', [ActivityController::class, 'toggle']);
+    // TAMBAHKAN DUA BARIS INI:
+    Route::put('/activities/{id}', [ActivityController::class, 'update']);  // Untuk Edit
+    Route::delete('/activities/{id}', [ActivityController::class, 'destroy']); // Untuk Hapus
 });

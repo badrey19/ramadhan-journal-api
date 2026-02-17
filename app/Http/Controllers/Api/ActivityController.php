@@ -65,4 +65,47 @@ class ActivityController extends Controller
 
         return response()->json(['success' => true, 'data' => $activity]);
     }
+
+    // Update kegiatan
+    public function update(Request $request, $id)
+    {
+        
+        // 1. Validasi input
+        $request->validate([
+            'title' => 'required|string',
+            'target' => 'required|integer',
+            'unit' => 'required|string',
+        ]);
+
+        // 2. Cari data milik user yang sedang login saja!
+        $activity = Activity::where('user_id', $request->user()->id)->find($id);
+
+        if (!$activity) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data tidak ditemukan atau Anda tidak memiliki akses.'
+            ], 404);
+        }
+
+        // 3. Update
+        $activity->update([
+            'title' => $request->title,
+            'target' => $request->target,
+            'unit' => $request->unit,
+        ]);
+
+        return response()->json([
+            'success' => true, 
+            'data' => $activity
+        ]);
+    }
+
+    // Hapus kegiatan
+    public function destroy(Request $request, $id)
+    {
+        $activity = Activity::where('user_id', $request->user()->id)->findOrFail($id);
+        $activity->delete();
+
+        return response()->json(['success' => true, 'message' => 'Kegiatan dihapus']);
+    }
 }
