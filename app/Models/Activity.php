@@ -23,4 +23,9 @@ class Activity extends Model
         'is_completed' => 'boolean',
         'target' => 'integer',
     ];
+
+    public function logs()
+    {
+        return $this->hasMany(ActivityLog::class);
+    }
 }

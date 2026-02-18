@@ -11,14 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('activities', function (Blueprint $table) {
+        //
+
+        Schema::create('quran_khatams', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('title'); // Contoh: Membaca Sholawat
-            $table->integer('target')->default(1); // Contoh: 1000 (kali)
-            $table->string('unit')->default('kali'); // kali, juz, halaman
-            // $table->boolean('is_completed')->default(false);
-            // $table->date('for_date'); // Penting: Agar list bisa reset tiap hari
+            $table->integer('khatam_number'); // Khatam ke-1, ke-2, dst
+            $table->date('completed_at');
             $table->timestamps();
         });
     }
@@ -28,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('activities');
+        //
     }
 };

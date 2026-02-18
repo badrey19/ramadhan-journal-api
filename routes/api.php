@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FinanceController;
+use App\Http\Controllers\Api\QuranController;
 use App\Http\Controllers\Api\UserController;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\Route;
@@ -22,9 +23,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/update', [UserController::class, 'update']);
     
     // Fitur Ramadan Tracker
+    // Fitur Ramadan Tracker
     Route::prefix('activities')->group(function () {
         Route::get('/', [ActivityController::class, 'index']);
         Route::post('/', [ActivityController::class, 'store']);
+        
+        // PINDAHKAN history ke ATAS toggle/update/delete
+        Route::get('/history', [ActivityController::class, 'history']); 
+
+        // Route dengan parameter {id} taruh di bawah
         Route::patch('/{id}/toggle', [ActivityController::class, 'toggle']);
         Route::put('/{id}', [ActivityController::class, 'update']);
         Route::delete('/{id}', [ActivityController::class, 'destroy']);
@@ -35,5 +42,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/summary', [FinanceController::class, 'getSummary']); // Menampilkan total & budget
         Route::post('/salary', [FinanceController::class, 'addSalary']);  // Input gaji & alokasi
         Route::post('/expense', [FinanceController::class, 'addExpense']); // Input pengeluaran
+    });
+
+    Route::prefix('quran')->group(function () {
+        Route::get('/status', [QuranController::class, 'getStatus']);
+        Route::post('/toggle/{juz}', [QuranController::class, 'toggleJuz']);
+        Route::post('/complete', [QuranController::class, 'completeKhatam']);
     });
 });

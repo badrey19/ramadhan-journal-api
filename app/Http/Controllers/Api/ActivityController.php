@@ -4,38 +4,117 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
+use App\Models\ActivityLog; // Pastikan model ini ada
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class ActivityController extends Controller
 {
-    // Ambil semua kegiatan user untuk hari ini
-    // app/Http/Controllers/Api/ActivityController.php
-
+    /**
+     * TAMPILAN UTAMA: List amalan hari ini (Otomatis Uncheck jika hari baru)
+     */
     public function index(Request $request)
     {
-        $date = $request->query('date', Carbon::today()->toDateString());
+        $user = $request->user();
+        $today = Carbon::today()->toDateString();
         
-        $activities = Activity::where('user_id', $request->user()->id)
-                            ->whereDate('for_date', $date)
-                            ->get();
+        // 1. Ambil semua master amalan milik user
+        $masterActivities = Activity::where('user_id', $user->id)->get();
 
-        $total = $activities->count();
-        $completed = $activities->where('is_completed', true)->count();
-        $percentage = $total > 0 ? round(($completed / $total) * 100) : 0;
+        // 2. Gabungkan dengan status dari log hari ini
+        $data = $masterActivities->map(function ($activity) use ($today, $user) {
+            // Cek apakah hari ini sudah ada log untuk amalan ini
+            $log = ActivityLog::where('activity_id', $activity->id)
+                ->where('user_id', $user->id)
+                ->whereDate('log_date', $today)
+                ->first();
+
+            return [
+                'id' => $activity->id,
+                'title' => $activity->title,
+                'target' => $activity->target,
+                'unit' => $activity->unit,
+                'is_completed' => $log ? (bool)$log->is_completed : false,
+            ];
+        });
+
+        $total = $data->count();
+        $completed = $data->where('is_completed', true)->count();
 
         return response()->json([
             'success' => true,
-            'data' => $activities,
+            'data' => $data,
             'summary' => [
                 'total' => $total,
                 'completed' => $completed,
-                'percentage' => $percentage
+                'percentage' => $total > 0 ? round(($completed / $total) * 100) : 0
             ]
         ]);
     }
 
-    // Tambah kegiatan baru
+    /**
+     * TOGGLE: Klik centang (Data masuk ke tabel logs)
+     */
+    public function toggle(Request $request, $id)
+    {
+        $user = $request->user();
+        $today = Carbon::today()->toDateString();
+
+        // Pastikan amalan (master) itu memang milik user
+        $activity = Activity::where('user_id', $user->id)->findOrFail($id);
+
+        // Update atau Create log untuk hari ini
+        $log = ActivityLog::updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'activity_id' => $id,
+                'log_date' => $today
+            ],
+            // Ini akan membalikkan nilai: jika belum ada (false) jadi true, jika ada true jadi false
+        );
+        
+        $log->is_completed = !$log->is_completed;
+        $log->save();
+
+        return response()->json([
+            'success' => true, 
+            'is_completed' => (bool)$log->is_completed
+        ]);
+    }
+
+    /**
+     * HISTORY: Mengambil riwayat amalan berdasarkan tanggal
+     */
+    public function history(Request $request)
+    {
+        $user = $request->user();
+
+        // Ambil riwayat log dikelompokkan berdasarkan tanggal
+        $history = ActivityLog::where('user_id', $user->id)
+            ->with('activity')
+            ->orderBy('log_date', 'desc')
+            ->get()
+            ->groupBy('log_date');
+
+        $result = [];
+        foreach ($history as $date => $logs) {
+            $result[] = [
+                'date' => $date,
+                'completed_count' => $logs->where('is_completed', true)->count(),
+                'details' => $logs->map(function($log) {
+                    return [
+                        'title' => $log->activity->title ?? 'Amalan Terhapus',
+                        'is_completed' => (bool)$log->is_completed
+                    ];
+                })
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $result]);
+    }
+
+    // --- Sisanya (store, update, destroy) tetap mengelola tabel Activity (Master) ---
+
     public function store(Request $request)
     {
         $request->validate([
@@ -49,63 +128,23 @@ class ActivityController extends Controller
             'title' => $request->title,
             'target' => $request->target,
             'unit' => $request->unit,
-            'for_date' => Carbon::today()->toDateString(),
-            'is_completed' => false
         ]);
 
         return response()->json(['success' => true, 'data' => $activity]);
     }
 
-    // Check/Uncheck kegiatan
-    public function toggle(Request $request, $id)
-    {
-        $activity = Activity::where('user_id', $request->user()->id)->findOrFail($id);
-        $activity->is_completed = !$activity->is_completed;
-        $activity->save();
-
-        return response()->json(['success' => true, 'data' => $activity]);
-    }
-
-    // Update kegiatan
     public function update(Request $request, $id)
     {
-        
-        // 1. Validasi input
-        $request->validate([
-            'title' => 'required|string',
-            'target' => 'required|integer',
-            'unit' => 'required|string',
-        ]);
+        $activity = Activity::where('user_id', $request->user()->id)->findOrFail($id);
+        $activity->update($request->only(['title', 'target', 'unit']));
 
-        // 2. Cari data milik user yang sedang login saja!
-        $activity = Activity::where('user_id', $request->user()->id)->find($id);
-
-        if (!$activity) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Data tidak ditemukan atau Anda tidak memiliki akses.'
-            ], 404);
-        }
-
-        // 3. Update
-        $activity->update([
-            'title' => $request->title,
-            'target' => $request->target,
-            'unit' => $request->unit,
-        ]);
-
-        return response()->json([
-            'success' => true, 
-            'data' => $activity
-        ]);
+        return response()->json(['success' => true, 'data' => $activity]);
     }
 
-    // Hapus kegiatan
     public function destroy(Request $request, $id)
     {
         $activity = Activity::where('user_id', $request->user()->id)->findOrFail($id);
         $activity->delete();
-
-        return response()->json(['success' => true, 'message' => 'Kegiatan dihapus']);
+        return response()->json(['success' => true, 'message' => 'Master amalan dihapus']);
     }
 }

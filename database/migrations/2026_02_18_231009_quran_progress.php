@@ -11,14 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('activities', function (Blueprint $table) {
+        //
+        Schema::create('quran_progress', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('title'); // Contoh: Membaca Sholawat
-            $table->integer('target')->default(1); // Contoh: 1000 (kali)
-            $table->string('unit')->default('kali'); // kali, juz, halaman
-            // $table->boolean('is_completed')->default(false);
-            // $table->date('for_date'); // Penting: Agar list bisa reset tiap hari
+            $table->integer('juz_number'); // 1 sampai 30
             $table->timestamps();
         });
     }
@@ -28,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('activities');
+        //
     }
 };
