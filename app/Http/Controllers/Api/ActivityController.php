@@ -94,24 +94,35 @@ class ActivityController extends Controller
     {
         $user = $request->user();
 
-        // Ambil riwayat log dikelompokkan berdasarkan tanggal
-        $history = ActivityLog::where('user_id', $user->id)
-            ->with('activity')
+        // 1. Ambil semua master amalan user
+        $masterActivities = Activity::where('user_id', $user->id)->get();
+
+        // 2. Ambil log amalan dan kelompokkan berdasarkan tanggal
+        $historyLogs = ActivityLog::where('user_id', $user->id)
             ->orderBy('log_date', 'desc')
             ->get()
             ->groupBy('log_date');
 
         $result = [];
-        foreach ($history as $date => $logs) {
+
+        foreach ($historyLogs as $date => $logs) {
+            // Buat map activity_id dari log agar mudah dicek
+            $logMap = $logs->keyBy('activity_id');
+
+            $details = $masterActivities->map(function($activity) use ($logMap) {
+                $log = $logMap->get($activity->id);
+                return [
+                    'title' => $activity->title,
+                    // Jika ada log dan is_completed true, maka true. Selain itu false.
+                    'is_completed' => $log ? (bool)$log->is_completed : false,
+                ];
+            });
+
             $result[] = [
                 'date' => $date,
-                'completed_count' => $logs->where('is_completed', true)->count(),
-                'details' => $logs->map(function($log) {
-                    return [
-                        'title' => $log->activity->title ?? 'Amalan Terhapus',
-                        'is_completed' => (bool)$log->is_completed
-                    ];
-                })
+                'completed_count' => $details->where('is_completed', true)->count(),
+                'total_count' => $details->count(), // Tambahan info total amalan
+                'details' => $details
             ];
         }
 
