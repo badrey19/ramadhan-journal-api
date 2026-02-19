@@ -59,75 +59,73 @@ class ActivityController extends Controller
     /**
      * TOGGLE: Klik centang (Data masuk ke tabel logs)
      */
-    public function toggle(Request $request, $id)
-    {
-        $user = $request->user();
-        $today = Carbon::today()->toDateString();
-        $activity = Activity::where('user_id', $user->id)->findOrFail($id);
-
-        // Gunakan updateOrCreate dengan nilai awal jika baru dibuat
-        $log = ActivityLog::firstOrCreate(
-            [
-                'user_id' => $user->id,
-                'activity_id' => $id,
-                'log_date' => $today
-            ],
-            [
-                'is_completed' => false // Default awal jika baru dibuat hari ini
-            ]
-        );
-        
-        // Toggle nilainya
-        $log->is_completed = !$log->is_completed;
-        $log->save();
-
-        return response()->json([
-            'success' => true, 
-            'is_completed' => (bool)$log->is_completed
-        ]);
-    }
+    
 
     /**
      * HISTORY: Mengambil riwayat amalan berdasarkan tanggal
      */
-    public function history(Request $request)
-    {
-        $user = $request->user();
+    // app/Http/Controllers/ActivityController.php
 
-        // 1. Ambil semua master amalan user
-        $masterActivities = Activity::where('user_id', $user->id)->get();
+public function history(Request $request) {
+    $user = $request->user();
+    
+    // Ambil semua master amalan (agar amalan yg tidak dikerjakan tetap muncul)
+    $masterActivities = Activity::where('user_id', $user->id)->get();
 
-        // 2. Ambil log amalan dan kelompokkan berdasarkan tanggal
-        $historyLogs = ActivityLog::where('user_id', $user->id)
-            ->orderBy('log_date', 'desc')
-            ->get()
-            ->groupBy('log_date');
+    // Ambil log, kelompokkan berdasarkan tanggal
+    $logsByDate = ActivityLog::where('user_id', $user->id)
+        ->orderBy('log_date', 'desc')
+        ->get()
+        ->groupBy('log_date');
 
-        $result = [];
+    $historyData = [];
 
-        foreach ($historyLogs as $date => $logs) {
-            // Buat map activity_id dari log agar mudah dicek
-            $logMap = $logs->keyBy('activity_id');
+    foreach ($logsByDate as $date => $logs) {
+        $logMap = $logs->keyBy('activity_id');
 
-            $details = $masterActivities->map(function($activity) use ($logMap) {
-                $log = $logMap->get($activity->id);
-                return [
-                    'title' => $activity->title,
-                    // Jika ada log dan is_completed true, maka true. Selain itu false.
-                    'is_completed' => $log ? (bool)$log->is_completed : false,
-                ];
-            });
-
-            $result[] = [
-                'date' => $date,
-                'completed_count' => $details->where('is_completed', true)->count(),
-                'total_count' => $details->count(), // Tambahan info total amalan
-                'details' => $details
+        // Map detail amalan untuk tanggal tersebut
+        $details = $masterActivities->map(function($activity) use ($logMap) {
+            $log = $logMap->get($activity->id);
+            return [
+                'id' => $activity->id,
+                'title' => $activity->title,
+                'is_completed' => $log ? (bool)$log->is_completed : false,
             ];
-        }
+        });
 
-        return response()->json(['success' => true, 'data' => $result]);
+        $historyData[] = [
+            'date' => $date,
+            'completed_count' => $details->where('is_completed', true)->count(),
+            'details' => $details->values()
+        ];
     }
+
+    return response()->json(['success' => true, 'data' => $historyData]);
+}
+
+public function toggle(Request $request, $id) {
+    $user = $request->user();
+    $today = date('Y-m-d');
+
+    // Cari log untuk hari ini
+    $log = ActivityLog::where('user_id', $user->id)
+        ->where('activity_id', $id)
+        ->where('log_date', $today)
+        ->first();
+
+    if ($log) {
+        $log->update(['is_completed' => !$log->is_completed]);
+    } else {
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'activity_id' => $id,
+            'log_date' => $today,
+            'is_completed' => true
+        ]);
+    }
+
+    return response()->json(['success' => true]);
+}
 
     // --- Sisanya (store, update, destroy) tetap mengelola tabel Activity (Master) ---
 
