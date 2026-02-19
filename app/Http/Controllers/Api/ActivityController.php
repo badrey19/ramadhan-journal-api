@@ -16,18 +16,22 @@ class ActivityController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $today = Carbon::today()->toDateString();
+        // Gunakan timezone yang konsisten
+        $today = Carbon::now('Asia/Jakarta')->toDateString();
         
-        // 1. Ambil semua master amalan milik user
+        // 1. Ambil semua master amalan
         $masterActivities = Activity::where('user_id', $user->id)->get();
 
-        // 2. Gabungkan dengan status dari log hari ini
-        $data = $masterActivities->map(function ($activity) use ($today, $user) {
-            // Cek apakah hari ini sudah ada log untuk amalan ini
-            $log = ActivityLog::where('activity_id', $activity->id)
-                ->where('user_id', $user->id)
-                ->whereDate('log_date', $today)
-                ->first();
+        // 2. Ambil SEMUA log hari ini sekaligus (Bukan satu-satu di dalam loop)
+        $logsToday = ActivityLog::where('user_id', $user->id)
+                    ->whereDate('log_date', $today)
+                    ->get()
+                    ->keyBy('activity_id'); // Kita index berdasarkan activity_id agar mudah dicari
+
+        // 3. Gabungkan data
+        $data = $masterActivities->map(function ($activity) use ($logsToday) {
+            // Cari apakah ada log untuk ID ini di koleksi logsToday
+            $log = $logsToday->get($activity->id);
 
             return [
                 'id' => $activity->id,
@@ -59,20 +63,21 @@ class ActivityController extends Controller
     {
         $user = $request->user();
         $today = Carbon::today()->toDateString();
-
-        // Pastikan amalan (master) itu memang milik user
         $activity = Activity::where('user_id', $user->id)->findOrFail($id);
 
-        // Update atau Create log untuk hari ini
-        $log = ActivityLog::updateOrCreate(
+        // Gunakan updateOrCreate dengan nilai awal jika baru dibuat
+        $log = ActivityLog::firstOrCreate(
             [
                 'user_id' => $user->id,
                 'activity_id' => $id,
                 'log_date' => $today
             ],
-            // Ini akan membalikkan nilai: jika belum ada (false) jadi true, jika ada true jadi false
+            [
+                'is_completed' => false // Default awal jika baru dibuat hari ini
+            ]
         );
         
+        // Toggle nilainya
         $log->is_completed = !$log->is_completed;
         $log->save();
 
