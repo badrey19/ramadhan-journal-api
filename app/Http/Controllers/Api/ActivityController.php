@@ -69,21 +69,21 @@ class ActivityController extends Controller
 public function history(Request $request) {
     $user = $request->user();
     
-    // Ambil semua master amalan (agar amalan yg tidak dikerjakan tetap muncul)
+    // 1. Ambil master amalan
     $masterActivities = Activity::where('user_id', $user->id)->get();
 
-    // Ambil log, kelompokkan berdasarkan tanggal
+    // 2. Ambil log, pastikan unik per activity per tanggal
     $logsByDate = ActivityLog::where('user_id', $user->id)
         ->orderBy('log_date', 'desc')
         ->get()
-        ->groupBy('log_date');
+        ->groupBy('log_date'); // Mengelompokkan berdasarkan YYYY-MM-DD
 
     $historyData = [];
 
     foreach ($logsByDate as $date => $logs) {
+        // KUNCI: keyBy akan menimpa jika ada ID yang sama, jadi pasti unik
         $logMap = $logs->keyBy('activity_id');
 
-        // Map detail amalan untuk tanggal tersebut
         $details = $masterActivities->map(function($activity) use ($logMap) {
             $log = $logMap->get($activity->id);
             return [
@@ -94,7 +94,8 @@ public function history(Request $request) {
         });
 
         $historyData[] = [
-            'date' => $date,
+            'date' => Carbon::parse($date)->translatedFormat('d F Y'), // Format lebih manusiawi
+            'raw_date' => $date, // Simpan untuk Key di Flutter
             'completed_count' => $details->where('is_completed', true)->count(),
             'details' => $details->values()
         ];
